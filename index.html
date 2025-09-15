@@ -9,7 +9,7 @@
       body { margin: 0; overflow: hidden; }
       canvas, .a-canvas { touch-action: manipulation; }
 
-      /* Overlay de instrucción */
+      /* Overlay de instrucción (UI) */
       #hint {
         position: fixed;
         top: 12px;
@@ -29,8 +29,8 @@
       }
       #hint.fade { opacity: 0; }
 
-      /* Botón flotante para intercambiar */
-      #swapBtn {
+      /* Botón flotante Pausar/Reanudar */
+      #toggleScanBtn {
         position: fixed;
         bottom: 16px;
         left: 50%;
@@ -48,74 +48,109 @@
         cursor: pointer;
         touch-action: manipulation;
       }
-      #swapBtn:disabled { opacity: .6; cursor: default; }
+      #toggleScanBtn:disabled { opacity: .6; cursor: default; }
     </style>
 
     <script>
-      // Intercambia las ENTIDADES entre padres (targets) sin recargar modelos
-      function swapEntities(elA, elB) {
-        const parentA = elA.parentNode;
-        const parentB = elB.parentNode;
-        const nextA = elA.nextSibling;
-
-        // Mueve A al padre de B (después de B) y B al padre de A (donde estaba A)
-        parentB.insertBefore(elA, elB.nextSibling);
-        parentA.insertBefore(elB, nextA);
+      // Obtiene el sistema de MindAR (imagen) desde la escena
+      function getMindImageSystem() {
+        const sceneEl = document.querySelector('a-scene');
+        return sceneEl && sceneEl.systems && sceneEl.systems['mindar-image-system'];
       }
 
-      function enableWhenReady() {
-        const btn = document.getElementById('swapBtn');
-        const a = document.getElementById('modelA');
-        const b = document.getElementById('modelB');
-        if (!btn || !a || !b) return;
+      // Estado local de pausa (independiente de implementación interna)
+      let isPaused = false; // asumimos que empieza corriendo
 
-        let loaded = 0;
-        const markLoaded = () => {
-          loaded++;
-          if (loaded >= 2) btn.disabled = false;
-        };
-
-        // a.hasLoaded/b.hasLoaded existen en A-Frame y cubren el caso ya cargado
-        if (a.hasLoaded) loaded++; else a.addEventListener('model-loaded', markLoaded, { once: true });
-        if (b.hasLoaded) loaded++; else b.addEventListener('model-loaded', markLoaded, { once: true });
-
-        if (loaded >= 2) btn.disabled = false;
+      function setButtonLabel(btn) {
+        btn.textContent = isPaused ? '▶️ Reanudar escaneo' : '⏸️ Pausar escaneo';
+        btn.setAttribute('aria-pressed', String(isPaused));
+        btn.setAttribute('aria-label', isPaused ? 'Reanudar escaneo' : 'Pausar escaneo');
       }
 
-      function setupSwapButton() {
-        const btn = document.getElementById('swapBtn');
+      function toggleScanning() {
+        const btn = document.getElementById('toggleScanBtn');
         const hint = document.getElementById('hint');
-        const a = document.getElementById('modelA');
-        const b = document.getElementById('modelB');
-        if (!btn || !a || !b) return;
+        const arSystem = getMindImageSystem();
+        if (!btn || !arSystem) return;
 
-        btn.addEventListener('click', () => {
-          btn.disabled = true; // evita doble click rápido
-          swapEntities(a, b);
+        btn.disabled = true;
 
-          // Oculta el hint en el primer uso
-          if (hint && !hint.classList.contains('fade')) {
-            hint.classList.add('fade');
-            setTimeout(() => { hint.style.display = 'none'; }, 450);
+        const hasPause = typeof arSystem.pause === 'function';
+        const hasResume = typeof arSystem.resume === 'function';
+
+        try {
+          if (!isPaused) {
+            // PAUSAR
+            if (hasPause) {
+              arSystem.pause();
+            } else {
+              // Fallback si no existe pause(): detenemos el sistema
+              arSystem.stop();
+            }
+            isPaused = true;
+          } else {
+            // REANUDAR
+            if (hasResume) {
+              arSystem.resume();
+            } else {
+              // Fallback si no existe resume(): iniciamos de nuevo
+              arSystem.start();
+            }
+            isPaused = false;
           }
+        } catch (e) {
+          // Si algo falla, intentamos el fallback stop/start directo
+          try {
+            if (!isPaused) {
+              arSystem.stop();
+              isPaused = true;
+            } else {
+              arSystem.start();
+              isPaused = false;
+            }
+          } catch (err) {
+            // último recurso: dejamos el botón utilizable
+          }
+        }
 
-          setTimeout(() => { btn.disabled = false; }, 250);
-        });
+        // Actualiza UI
+        setButtonLabel(btn);
+
+        // Oculta el hint tras el primer uso
+        if (hint && !hint.classList.contains('fade')) {
+          hint.classList.add('fade');
+          setTimeout(() => { hint.style.display = 'none'; }, 450);
+        }
+
+        // Rehabilita tras un pequeño retardo
+        setTimeout(() => { btn.disabled = false; }, 300);
       }
 
       document.addEventListener('DOMContentLoaded', () => {
-        setupSwapButton();
-      });
-      window.addEventListener('load', () => {
-        enableWhenReady();
+        const btn = document.getElementById('toggleScanBtn');
+        setButtonLabel(btn);
+        btn.disabled = true; // se habilita cuando MindAR esté listo
+
+        // Habilita el botón cuando MindAR notifica que está listo
+        const sceneEl = document.querySelector('a-scene');
+        if (sceneEl) {
+          sceneEl.addEventListener('arReady', () => {
+            btn.disabled = false;
+          });
+          sceneEl.addEventListener('arError', () => {
+            // Si hay error de cámara/permiso, no habilitamos el botón
+          });
+        }
+
+        btn.addEventListener('click', toggleScanning);
       });
     </script>
   </head>
   <body>
     <!-- Texto de UI -->
-    <div id="hint">Presiona el botón para intercambiar los modelos</div>
+    <div id="hint">Usa el botón para pausar o reanudar el escaneo de los marcadores</div>
     <!-- Botón global -->
-    <button id="swapBtn" aria-label="Intercambiar modelos" disabled>🔁 Intercambiar modelos</button>
+    <button id="toggleScanBtn" aria-pressed="false" aria-label="Pausar escaneo">⏸️ Pausar escaneo</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
@@ -126,7 +161,7 @@
       embedded
     >
       <a-assets>
-        <!-- Usa tus rutas reales -->
+        <!-- Rutas a tus modelos -->
         <a-asset-item id="clockModel" src="./clock.glb"></a-asset-item>
         <a-asset-item id="crownModel" src="./kings_crown.glb"></a-asset-item>
       </a-assets>
@@ -134,7 +169,7 @@
       <!-- Cámara simple -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Target 0 (id opcional por si lo quieres referenciar) -->
+      <!-- Target 0 -->
       <a-entity id="target0" mindar-image-target="targetIndex: 0">
         <a-gltf-model
           id="modelA"
@@ -160,4 +195,5 @@
     </a-scene>
   </body>
 </html>
+
 
