@@ -7,6 +7,9 @@
 
     <style>
       body { margin: 0; overflow: hidden; }
+      /* Evita gestos que “roben” el tap (doble-tap zoom, etc.) */
+      canvas, .a-canvas { touch-action: manipulation; }
+
       /* Overlay de instrucción */
       #hint {
         position: fixed;
@@ -21,55 +24,112 @@
         font-size: 14px;
         letter-spacing: .2px;
         z-index: 9999;
-        pointer-events: none; /* no bloquea toques/clicks del AR */
+        pointer-events: none; /* no bloquea el botón */
         box-shadow: 0 4px 16px rgba(0,0,0,.25);
         transition: opacity .4s ease;
       }
       #hint.fade { opacity: 0; }
+
+      /* Botón flotante para intercambiar */
+      #swapBtn {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10000;
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 9999px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #0ea5e9; /* celeste */
+        color: white;
+        box-shadow: 0 8px 24px rgba(0,0,0,.2);
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      #swapBtn:disabled {
+        opacity: .6;
+        cursor: default;
+      }
     </style>
 
     <script>
-      // Componente: al hacer click, intercambia el valor del componente 'gltf-model'
-      AFRAME.registerComponent('swap-on-click', {
-        schema: { other: { type: 'selector' } },
-        init: function () {
-          const swap = () => {
-            const other = this.data.other;
-            if (!other) return;
+      // Intercambio por botón: usamos el atributo 'src' de <a-gltf-model>
+      function getModelSrc(el) {
+        return el.getAttribute('src') || el.getAttribute('gltf-model');
+      }
+      function setModelSrc(el, v) {
+        // Establecemos ambos por robustez (algunos setups leen uno u otro)
+        el.setAttribute('src', v);
+        el.setAttribute('gltf-model', v);
+      }
 
-            // En A-Frame 1.5 devuelve una STRING (#assetId o URL)
-            const mySrc    = this.el.getAttribute('gltf-model') || this.el.getAttribute('src');
-            const otherSrc = other.getAttribute('gltf-model')   || other.getAttribute('src');
-            if (!mySrc || !otherSrc) return;
+      function enableWhenReady() {
+        const btn = document.getElementById('swapBtn');
+        const a = document.getElementById('modelA');
+        const b = document.getElementById('modelB');
+        if (!btn || !a || !b) return;
 
-            // Intercambiar fuentes GLTF
-            this.el.setAttribute('gltf-model', otherSrc);
-            other.setAttribute('gltf-model', mySrc);
+        let loaded = 0;
+        const markLoaded = () => {
+          loaded++;
+          if (loaded >= 2) btn.disabled = false;
+        };
 
-            // Ocultar la ayuda de UI tras el primer intercambio
-            const hint = document.getElementById('hint');
-            if (hint && !hint.classList.contains('fade')) {
-              hint.classList.add('fade');
-              setTimeout(() => { hint.style.display = 'none'; }, 450);
-            }
-          };
+        // Si ya cargaron, habilita; si no, espera a 'model-loaded'
+        if (a.hasLoaded) { loaded++; }
+        else { a.addEventListener('model-loaded', markLoaded, { once: true }); }
+        if (b.hasLoaded) { loaded++; }
+        else { b.addEventListener('model-loaded', markLoaded, { once: true }); }
 
-          // Usa el evento 'click' (manejado por cursor/raycaster)
-          this.el.addEventListener('click', swap);
-        }
-      });
+        if (loaded >= 2) btn.disabled = false;
+      }
 
-      // (Opcional) ejemplo de hook de MindAR
+      function setupSwapButton() {
+        const btn = document.getElementById('swapBtn');
+        const hint = document.getElementById('hint');
+        const a = document.getElementById('modelA');
+        const b = document.getElementById('modelB');
+
+        if (!btn || !a || !b) return;
+
+        btn.addEventListener('click', () => {
+          btn.disabled = true; // evita doble click rápido
+
+          const aSrc = getModelSrc(a);
+          const bSrc = getModelSrc(b);
+          if (aSrc && bSrc) {
+            setModelSrc(a, bSrc);
+            setModelSrc(b, aSrc);
+          }
+
+          // Oculta el hint la primera vez
+          if (hint && !hint.classList.contains('fade')) {
+            hint.classList.add('fade');
+            setTimeout(() => { hint.style.display = 'none'; }, 450);
+          }
+
+          // Re-habilita un poco después para no saturar
+          setTimeout(() => { btn.disabled = false; }, 300);
+        });
+      }
+
       document.addEventListener('DOMContentLoaded', () => {
-        const scene = document.querySelector('a-scene');
-        if (!scene) return;
-        // scene.addEventListener('targetFound', () => { /* ... */ });
+        setupSwapButton();
+      });
+      window.addEventListener('load', () => {
+        // Cuando todo cargó, habilitamos el botón al tener ambos modelos listos
+        enableWhenReady();
       });
     </script>
   </head>
   <body>
     <!-- Texto de UI -->
-    <div id="hint">Toca o haz clic en un modelo para intercambiar posiciones</div>
+    <div id="hint">Presiona el botón para intercambiar los modelos</div>
+    <!-- Botón global (funciona en móvil y desktop) -->
+    <button id="swapBtn" aria-label="Intercambiar modelos" disabled>🔁 Intercambiar modelos</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
@@ -84,25 +144,18 @@
         <a-asset-item id="crownModel" src="./kings_crown.glb"></a-asset-item>
       </a-assets>
 
-      <!-- Cámara + cursor/raycaster para clicks (mouse/touch) -->
-      <a-camera position="0 0 0" look-controls="enabled: false">
-        <a-entity
-          cursor="rayOrigin: mouse; fuse: false"
-          raycaster="objects: .clickable, [gltf-model]; far: 100; interval: 0">
-        </a-entity>
-      </a-camera>
+      <!-- Cámara simple (sin cursor/raycaster) -->
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Target 0 -->
       <a-entity mindar-image-target="targetIndex: 0">
         <a-gltf-model
           id="modelA"
-          class="clickable"
           rotation="0 0 0"
           position="0 -0.25 0"
-          scale="2.00 2.00 2.00"  
+          scale="2.00 2.00 2.00"
           src="#crownModel"
-          animation-mixer
-          swap-on-click="other: #modelB">
+          animation-mixer>
         </a-gltf-model>
       </a-entity>
 
@@ -110,13 +163,11 @@
       <a-entity mindar-image-target="targetIndex: 1">
         <a-gltf-model
           id="modelB"
-          class="clickable"
           rotation="0 0 0"
           position="0 -0.25 0"
-          scale="0.15 0.15 0.15" 
+          scale="0.15 0.15 0.15"
           src="#clockModel"
-          animation-mixer
-          swap-on-click="other: #modelA">
+          animation-mixer>
         </a-gltf-model>
       </a-entity>
     </a-scene>
