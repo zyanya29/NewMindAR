@@ -68,10 +68,10 @@
         if (btn) {
           if (v) {
             btn.classList.add('holding');
-            btn.textContent = '⏱️ Girando (mantén presionado)…';
+            btn.textContent = 'Girando';
           } else {
             btn.classList.remove('holding');
-            btn.textContent = '🔁 Mantén presionado para girar';
+            btn.textContent = 'Girar';
           }
         }
       }
@@ -108,7 +108,7 @@
     <!-- Hint actualizado -->
     <div id="hint">Mantén presionado el botón para hacer girar los modelos</div>
     <!-- Botón actualizado -->
-    <button id="spinBtn">🔁 Mantén presionado para girar</button>
+    <button id="spinBtn">Girar</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
