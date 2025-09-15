@@ -68,10 +68,10 @@
         if (btn) {
           if (v) {
             btn.classList.add('holding');
-            btn.textContent = 'Girando';
+            btn.textContent = 'Rotando';
           } else {
             btn.classList.remove('holding');
-            btn.textContent = 'Girar';
+            btn.textContent = 'Rotar';
           }
         }
       }
@@ -106,9 +106,9 @@
   </head>
   <body>
     <!-- Hint actualizado -->
-    <div id="hint">Mantén presionado el botón para hacer girar los modelos</div>
+    <div id="hint">Mantén presionado el botón para rotar los modelos</div>
     <!-- Botón actualizado -->
-    <button id="spinBtn">Girar</button>
+    <button id="spinBtn">Rotar</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
