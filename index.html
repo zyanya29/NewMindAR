@@ -2,144 +2,61 @@
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
     <style>
-      body { margin: 0; overflow: hidden; }
-      canvas, .a-canvas { touch-action: manipulation; }
-
-      /* UI */
-      #hint {
-        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-        background: rgba(0,0,0,0.6); color:#fff; padding: 8px 14px; border-radius: 9999px;
-        font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        z-index: 9999; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.25);
-        transition: opacity .4s ease;
+      body{margin:0;overflow:hidden}
+      #hint{
+        position:fixed;top:12px;left:50%;transform:translateX(-50%);
+        background:rgba(0,0,0,.6);color:#fff;padding:8px 14px;border-radius:9999px;
+        font:14px/1.2 system-ui;-webkit-user-select:none;user-select:none;pointer-events:none;z-index:9999
       }
-      #hint.fade { opacity: 0; }
-
-      #swapBtn {
-        position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-        z-index: 10000; padding: 12px 18px; border: 0; border-radius: 9999px;
-        font: 600 15px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        background: #0ea5e9; color: white; box-shadow: 0 8px 24px rgba(0,0,0,.2);
-        cursor: pointer; touch-action: manipulation;
+      #swapBtn{
+        position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
+        z-index:10000;padding:12px 18px;border:0;border-radius:9999px;
+        font:600 15px system-ui;background:#0ea5e9;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.2)
       }
-      #swapBtn:disabled { opacity: .6; cursor: default; }
-
-      #status {
-        position: fixed; top: 48px; left: 50%; transform: translateX(-50%);
-        background: rgba(20,20,20,.8); color: #fffa; padding: 6px 10px; border-radius: 8px;
-        font: 12px system-ui; z-index: 9999; max-width: 92vw; text-align: center;
-      }
+      #swapBtn:disabled{opacity:.6}
     </style>
-
     <script>
-      // === Configura aquí los 2 modelos por target (IDs declarados en <a-assets>) ===
-      const modelsT0 = ['#t0_m1', '#t0_m2']; // Target 0
-      const modelsT1 = ['#t1_m1', '#t1_m2']; // Target 1
-      // ===============================================================================
-
-      let idx0 = 0, idx1 = 0;
-
-      function uiMsg(txt, isError=false) {
-        const s = document.getElementById('status');
-        if (!s) return;
-        s.style.display = 'block';
-        s.style.color = isError ? '#ffd1d1' : '#fffa';
-        s.textContent = txt;
-        clearTimeout(s._t);
-        s._t = setTimeout(() => s.style.display = 'none', 2500);
+      // Alternar visibilidad sin tocar src: robusto en móvil y desktop
+      function toggleVisible(pairA, pairB){
+        // pair = [entidadModelo1, entidadModelo2]
+        const [a1, a2] = pairA, [b1, b2] = pairB;
+        a1.setAttribute('visible', !a1.getAttribute('visible'));
+        a2.setAttribute('visible', !a2.getAttribute('visible'));
+        b1.setAttribute('visible', !b1.getAttribute('visible'));
+        b2.setAttribute('visible', !b2.getAttribute('visible'));
       }
 
-      // Setea modelo incluyendo dracoDecoderPath para GLB con compresión
-      function setModelSrc(el, assetId) {
-        // setAttribute objeto: permite parámetros del componente gltf-model
-        el.setAttribute('gltf-model', {
-          src: assetId,
-          dracoDecoderPath: 'https://www.gstatic.com/draco/v1/decoders/'
-          // Si usas texturas KTX2, añade: ktx2TranscoderPath: 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/libs/basis/'
+      function allLoaded(elements, cb){
+        let left = elements.length;
+        const done = () => (--left === 0 && cb());
+        elements.forEach(el => {
+          if (el.hasLoaded) return done();
+          el.addEventListener('model-loaded', done, {once:true});
         });
-        // por compatibilidad, también el atributo src
-        el.setAttribute('src', assetId);
       }
 
-      function popAnimFor(el) {
-        const sc = el.getAttribute('scale') || {x:0.20, y:0.20, z:0.20};
-        const sx = sc.x ?? sc, sy = sc.y ?? sc, sz = sc.z ?? sc;
-        el.setAttribute('animation__pop', `property: scale; startEvents: pop; from: 0 0 0; to: ${sx} ${sy} ${sz}; dur: 380; easing: easeOutBack`);
-      }
-
-      function enableWhenReady() {
+      document.addEventListener('DOMContentLoaded', () => {
+        const a1 = document.getElementById('t0_model1');
+        const a2 = document.getElementById('t0_model2');
+        const b1 = document.getElementById('t1_model1');
+        const b2 = document.getElementById('t1_model2');
         const btn = document.getElementById('swapBtn');
-        const a = document.getElementById('modelA');
-        const b = document.getElementById('modelB');
-        if (!btn || !a || !b) return;
-        let loaded = 0;
-        const mark = () => { loaded++; if (loaded >= 2) { btn.disabled = false; uiMsg('Modelos listos'); } };
 
-        if (a.hasLoaded) loaded++; else a.addEventListener('model-loaded', mark, { once: true });
-        if (b.hasLoaded) loaded++; else b.addEventListener('model-loaded', mark, { once: true });
-        if (loaded >= 2) { btn.disabled = false; uiMsg('Modelos listos'); }
-      }
-
-      function wireModelEvents(el, name) {
-        el.addEventListener('model-loaded', () => uiMsg(`Cargado: ${name}`));
-        el.addEventListener('model-error', (e) => {
-          console.error(`Error cargando ${name}`, e.detail && e.detail.src, e);
-          uiMsg(`Error cargando ${name} (revisa la ruta)`, true);
-        });
-      }
-
-      function wireAssetLoaded(ids) {
-        ids.forEach(sel => {
-          const it = document.querySelector(sel);
-          if (!it) { uiMsg(`No existe asset ${sel}`, true); return; }
-          if (it.hasLoaded) return;
-          it.addEventListener('loaded', () => uiMsg(`Asset listo: ${sel}`));
-        });
-      }
-
-      function setupSwap() {
-        const btn = document.getElementById('swapBtn');
-        const hint = document.getElementById('hint');
-        const mA = document.getElementById('modelA');
-        const mB = document.getElementById('modelB');
-
-        popAnimFor(mA); popAnimFor(mB);
-        wireModelEvents(mA, 'Target 0'); wireModelEvents(mB, 'Target 1');
-        wireAssetLoaded([...modelsT0, ...modelsT1]);
-
-        enableWhenReady();
+        // Habilita cuando todos están listos (una sola carga, sin cambios de src)
+        allLoaded([a1,a2,b1,b2], () => btn.disabled = false);
 
         btn.addEventListener('click', () => {
-          btn.disabled = true;
-
-          idx0 = 1 - idx0;  // alterna 0 <-> 1
-          idx1 = 1 - idx1;
-
-          setModelSrc(mA, modelsT0[idx0]);
-          setModelSrc(mB, modelsT1[idx1]);
-
-          mA.emit('pop'); mB.emit('pop');
-
-          if (hint && !hint.classList.contains('fade')) {
-            hint.classList.add('fade');
-            setTimeout(() => { hint.style.display = 'none'; }, 450);
-          }
-
-          // espera breve para evitar doble click
-          setTimeout(() => { btn.disabled = false; }, 240);
+          btn.disabled = true; // antirebote breve
+          toggleVisible([a1,a2],[b1,b2]);
+          setTimeout(() => btn.disabled = false, 150);
         });
-      }
-
-      document.addEventListener('DOMContentLoaded', setupSwap);
+      });
     </script>
   </head>
   <body>
-    <div id="hint">Presiona el botón para alternar el modelo de cada marcador</div>
-    <div id="status" style="display:none"></div>
+    <div id="hint">Pulsa el botón para alternar los modelos de cada marcador</div>
     <button id="swapBtn" disabled>🔁 Cambiar modelos</button>
 
     <a-scene
@@ -151,40 +68,37 @@
       embedded
     >
       <a-assets>
-        <!-- 🔁🔁🔁 REEMPLAZA AQUÍ LAS RUTAS DE TUS MODELOS (GLB/GLTF) 🔁🔁🔁 -->
-        <!-- TARGET 0 (dos modelos): -->
-        <a-asset-item id="t0_m1" src="./ball.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 1 de T0 -->
-        <a-asset-item id="t0_m2" src="./ojo.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 2 de T0 -->
-
-        <!-- TARGET 1 (dos modelos): -->
-        <a-asset-item id="t1_m1" src="./chair.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 1 de T1 -->
-        <a-asset-item id="t1_m2" src="./trono.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 2 de T1 -->
+        <!-- Reemplaza estas rutas por tus GLB/GLTF -->
+        <a-asset-item id="t0_m1" src="./ball.glb"></a-asset-item>
+        <a-asset-item id="t0_m2" src="./ojo.glb"></a-asset-item>
+        <a-asset-item id="t1_m1" src="./silla.glb"></a-asset-item>
+        <a-asset-item id="t1_m2" src="./trono.glb"></a-asset-item>
       </a-assets>
 
-      <!-- Cámara -->
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
 
-      <!-- Target 0 -->
-      <a-entity id="target0" mindar-image-target="targetIndex: 0">
-        <a-gltf-model
-          id="modelA"
-          position="0 -0.25 0"
-          scale="0.20 0.20 0.20"
-          src="#t0_m1"  <!-- modelo inicial de T0 -->
-          animation-mixer>
-        </a-gltf-model>
+      <!-- TARGET 0 -->
+      <a-entity mindar-image-target="targetIndex: 0">
+        <!-- Modelo 1 (visible) -->
+        <a-entity id="t0_model1" visible="true" position="0 -0.25 0" scale="0.05 0.05 0.05">
+          <a-gltf-model src="#t0_m1" animation-mixer></a-gltf-model>
+        </a-entity>
+        <!-- Modelo 2 (oculto al inicio) -->
+        <a-entity id="t0_model2" visible="false" position="0 -0.25 0" scale="0.2 0.2 0.2">
+          <a-gltf-model src="#t0_m2" animation-mixer></a-gltf-model>
+        </a-entity>
       </a-entity>
 
-      <!-- Target 1 -->
-      <a-entity id="target1" mindar-image-target="targetIndex: 1">
-        <a-gltf-model
-          id="modelB"
-          position="0 -0.25 0"
-          scale="0.20 0.20 0.20"
-          src="#t1_m1"  <!-- modelo inicial de T1 -->
-          animation-mixer>
-        </a-gltf-model>
+      <!-- TARGET 1 -->
+      <a-entity mindar-image-target="targetIndex: 1">
+        <a-entity id="t1_model1" visible="true" position="0 -0.25 0" scale="0.2 0.2 0.2">
+          <a-gltf-model src="#t1_m1" animation-mixer></a-gltf-model>
+        </a-entity>
+        <a-entity id="t1_model2" visible="false" position="0 -0.25 0" scale="0.2 0.2 0.2">
+          <a-gltf-model src="#t1_m2" animation-mixer></a-gltf-model>
+        </a-entity>
       </a-entity>
     </a-scene>
   </body>
 </html>
+
