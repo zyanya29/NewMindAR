@@ -9,161 +9,124 @@
       body { margin: 0; overflow: hidden; }
       canvas, .a-canvas { touch-action: manipulation; }
 
-      /* Overlay de instrucción (UI) */
+      /* Hint / ayuda */
       #hint {
-        position: fixed;
-        top: 12px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(0,0,0,0.6);
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 9999px;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        font-size: 14px;
-        letter-spacing: .2px;
-        z-index: 9999;
-        pointer-events: none;
-        box-shadow: 0 4px 16px rgba(0,0,0,.25);
+        position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+        background: rgba(0,0,0,0.6); color:#fff; padding: 8px 14px; border-radius: 9999px;
+        font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        z-index: 9999; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.25);
         transition: opacity .4s ease;
       }
       #hint.fade { opacity: 0; }
 
-      /* Botón flotante Pausar/Reanudar */
-      #toggleScanBtn {
-        position: fixed;
-        bottom: 16px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 10000;
-        padding: 12px 18px;
-        border: 0;
-        border-radius: 9999px;
-        font-size: 15px;
-        font-weight: 600;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-        background: #0ea5e9;
-        color: white;
-        box-shadow: 0 8px 24px rgba(0,0,0,.2);
-        cursor: pointer;
-        touch-action: manipulation;
+      /* Botón flotante */
+      #swapBtn {
+        position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+        z-index: 10000; padding: 12px 18px; border: 0; border-radius: 9999px;
+        font: 600 15px system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #0ea5e9; color: white; box-shadow: 0 8px 24px rgba(0,0,0,.2);
+        cursor: pointer; touch-action: manipulation;
       }
-      #toggleScanBtn:disabled { opacity: .6; cursor: default; }
+      #swapBtn:disabled { opacity: .6; cursor: default; }
     </style>
 
     <script>
-      // Obtiene el sistema de MindAR (imagen) desde la escena
-      function getMindImageSystem() {
-        const sceneEl = document.querySelector('a-scene');
-        return sceneEl && sceneEl.systems && sceneEl.systems['mindar-image-system'];
+      // --- LISTAS DE MODELOS (2 por target) → usa los IDs definidos en <a-assets> ---
+      const modelsT0 = ['#t0_m1', '#t0_m2']; // TargetIndex 0: modelo 1 y 2
+      const modelsT1 = ['#t1_m1', '#t1_m2']; // TargetIndex 1: modelo 1 y 2
+      // -----------------------------------------------------------------------------
+
+      let idx0 = 0, idx1 = 0; // índices actuales en cada target
+
+      function setModelSrc(el, assetId) {
+        // Por robustez, seteamos ambos atributos aceptados por <a-gltf-model>
+        el.setAttribute('src', assetId);
+        el.setAttribute('gltf-model', assetId);
       }
 
-      // Estado local de pausa (independiente de implementación interna)
-      let isPaused = false; // asumimos que empieza corriendo
-
-      function setButtonLabel(btn) {
-        btn.textContent = isPaused ? '▶️ Reanudar escaneo' : '⏸️ Pausar escaneo';
-        btn.setAttribute('aria-pressed', String(isPaused));
-        btn.setAttribute('aria-label', isPaused ? 'Reanudar escaneo' : 'Pausar escaneo');
+      function popAnimFor(el) {
+        // Crea/ajusta una animación de "pop" acorde a la escala actual
+        const sc = el.getAttribute('scale') || {x:0.20, y:0.20, z:0.20};
+        const sx = sc.x ?? sc, sy = sc.y ?? sc, sz = sc.z ?? sc;
+        el.setAttribute('animation__pop', `property: scale; startEvents: pop; from: 0 0 0; to: ${sx} ${sy} ${sz}; dur: 380; easing: easeOutBack`);
       }
 
-      function toggleScanning() {
-        const btn = document.getElementById('toggleScanBtn');
+      function enableWhenReady() {
+        const btn = document.getElementById('swapBtn');
+        const a = document.getElementById('modelA');
+        const b = document.getElementById('modelB');
+        if (!btn || !a || !b) return;
+        let loaded = 0;
+        const mark = () => { loaded++; if (loaded >= 2) btn.disabled = false; };
+
+        if (a.hasLoaded) loaded++; else a.addEventListener('model-loaded', mark, { once: true });
+        if (b.hasLoaded) loaded++; else b.addEventListener('model-loaded', mark, { once: true });
+        if (loaded >= 2) btn.disabled = false;
+      }
+
+      function setupSwap() {
+        const btn = document.getElementById('swapBtn');
         const hint = document.getElementById('hint');
-        const arSystem = getMindImageSystem();
-        if (!btn || !arSystem) return;
+        const mA = document.getElementById('modelA'); // target 0
+        const mB = document.getElementById('modelB'); // target 1
 
-        btn.disabled = true;
+        // Preparar animación "pop"
+        popAnimFor(mA);
+        popAnimFor(mB);
 
-        const hasPause = typeof arSystem.pause === 'function';
-        const hasResume = typeof arSystem.resume === 'function';
+        // Habilitar botón cuando los modelos iniciales ya cargaron
+        enableWhenReady();
 
-        try {
-          if (!isPaused) {
-            // PAUSAR
-            if (hasPause) {
-              arSystem.pause();
-            } else {
-              // Fallback si no existe pause(): detenemos el sistema
-              arSystem.stop();
-            }
-            isPaused = true;
-          } else {
-            // REANUDAR
-            if (hasResume) {
-              arSystem.resume();
-            } else {
-              // Fallback si no existe resume(): iniciamos de nuevo
-              arSystem.start();
-            }
-            isPaused = false;
+        btn.addEventListener('click', () => {
+          btn.disabled = true;
+
+          // Avanza al "otro" modelo disponible en cada target (toggle 0↔1)
+          idx0 = 1 - idx0;
+          idx1 = 1 - idx1;
+
+          setModelSrc(mA, modelsT0[idx0]);
+          setModelSrc(mB, modelsT1[idx1]);
+
+          // Feedback visual
+          mA.emit('pop');
+          mB.emit('pop');
+
+          // Ocultar hint en el primer uso
+          if (hint && !hint.classList.contains('fade')) {
+            hint.classList.add('fade');
+            setTimeout(() => { hint.style.display = 'none'; }, 450);
           }
-        } catch (e) {
-          // Si algo falla, intentamos el fallback stop/start directo
-          try {
-            if (!isPaused) {
-              arSystem.stop();
-              isPaused = true;
-            } else {
-              arSystem.start();
-              isPaused = false;
-            }
-          } catch (err) {
-            // último recurso: dejamos el botón utilizable
-          }
-        }
 
-        // Actualiza UI
-        setButtonLabel(btn);
-
-        // Oculta el hint tras el primer uso
-        if (hint && !hint.classList.contains('fade')) {
-          hint.classList.add('fade');
-          setTimeout(() => { hint.style.display = 'none'; }, 450);
-        }
-
-        // Rehabilita tras un pequeño retardo
-        setTimeout(() => { btn.disabled = false; }, 300);
+          setTimeout(() => { btn.disabled = false; }, 220);
+        });
       }
 
-      document.addEventListener('DOMContentLoaded', () => {
-        const btn = document.getElementById('toggleScanBtn');
-        setButtonLabel(btn);
-        btn.disabled = true; // se habilita cuando MindAR esté listo
-
-        // Habilita el botón cuando MindAR notifica que está listo
-        const sceneEl = document.querySelector('a-scene');
-        if (sceneEl) {
-          sceneEl.addEventListener('arReady', () => {
-            btn.disabled = false;
-          });
-          sceneEl.addEventListener('arError', () => {
-            // Si hay error de cámara/permiso, no habilitamos el botón
-          });
-        }
-
-        btn.addEventListener('click', toggleScanning);
-      });
+      document.addEventListener('DOMContentLoaded', setupSwap);
     </script>
   </head>
   <body>
     <!-- Texto de UI -->
-    <div id="hint">Usa el botón para pausar o reanudar el escaneo de los marcadores</div>
+    <div id="hint">Presiona el botón para cambiar el modelo de cada marcador</div>
     <!-- Botón global -->
-    <button id="toggleScanBtn" aria-pressed="false" aria-label="Pausar escaneo">⏸️ Pausar escaneo</button>
+    <button id="swapBtn" disabled>🔁 Cambiar modelos</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
       color-space="sRGB"
-      renderer="colorManagement: true, physicallyCorrectLights"
+      renderer="colorManagement: true; physicallyCorrectLights: true"
       vr-mode-ui="enabled: false"
       device-orientation-permission-ui="enabled: false"
       embedded
     >
       <a-assets>
-        <!-- Rutas a tus modelos -->
-        <a-asset-item id="clockModel" src="./clock.glb"></a-asset-item>
-        <a-asset-item id="crownModel" src="./kings_crown.glb"></a-asset-item>
+        <!-- 🔁🔁🔁 REEMPLAZA AQUÍ LAS RUTAS DE TUS MODELOS 🔁🔁🔁 -->
+        <!-- TARGET 0 (dos modelos): pon aquí los GLB/GLTF del target 0 -->
+        <a-asset-item id="t0_m1" src="./target0_modelo_1.glb"></a-asset-item> <!-- ← URL del modelo 1 de T0 -->
+        <a-asset-item id="t0_m2" src="./target0_modelo_2.glb"></a-asset-item> <!-- ← URL del modelo 2 de T0 -->
+
+        <!-- TARGET 1 (dos modelos): pon aquí los GLB/GLTF del target 1 -->
+        <a-asset-item id="t1_m1" src="./target1_modelo_1.glb"></a-asset-item> <!-- ← URL del modelo 1 de T1 -->
+        <a-asset-item id="t1_m2" src="./target1_modelo_2.glb"></a-asset-item> <!-- ← URL del modelo 2 de T1 -->
       </a-assets>
 
       <!-- Cámara simple -->
@@ -173,10 +136,9 @@
       <a-entity id="target0" mindar-image-target="targetIndex: 0">
         <a-gltf-model
           id="modelA"
-          rotation="0 0 0"
           position="0 -0.25 0"
-          scale="2.00 2.00 2.00"
-          src="#crownModel"
+          scale="0.20 0.20 0.20"
+          src="#t0_m1"       <!-- modelo inicial del target 0 -->
           animation-mixer>
         </a-gltf-model>
       </a-entity>
@@ -185,10 +147,9 @@
       <a-entity id="target1" mindar-image-target="targetIndex: 1">
         <a-gltf-model
           id="modelB"
-          rotation="0 0 0"
           position="0 -0.25 0"
           scale="0.20 0.20 0.20"
-          src="#clockModel"
+          src="#t1_m1"       <!-- modelo inicial del target 1 -->
           animation-mixer>
         </a-gltf-model>
       </a-entity>
