@@ -56,7 +56,7 @@
           if (!window.__spinHeld) return;
           const rot = this.el.getAttribute('rotation') || {x:0,y:0,z:0};
           // Sentido horario sobre Z => disminuir ángulo (regla de la mano derecha)
-          rot.z -= (this.data.speed * (dt / 1000));
+          rot.y -= (this.data.speed * (dt / 1000));
           this.el.setAttribute('rotation', rot);
         }
       });
@@ -132,7 +132,7 @@
         <a-gltf-model
           id="modelA"
           position="0 -0.25 0"
-          scale="0.2 0.2 0.2"
+          scale="1.0 1.0 1.0"
           src="#chairModel"
           animation-mixer
           spin-while-held="speed: 180">
@@ -144,7 +144,7 @@
         <a-gltf-model
           id="modelB"
           position="0 -0.25 0"
-          scale="0.15 0.15 0.15"
+          scale="0.01 0.01 0.01"
           src="#ojoModel"
           animation-mixer
           spin-while-held="speed: 180">
