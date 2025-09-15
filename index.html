@@ -1,21 +1,128 @@
-
 <html>
   <head>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+      body { margin: 0; overflow: hidden; }
+      /* Overlay de instrucción */
+      #hint {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 9999px;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 14px;
+        letter-spacing: .2px;
+        z-index: 9999;
+        pointer-events: none; /* no bloquea toques/clicks del AR */
+        box-shadow: 0 4px 16px rgba(0,0,0,.25);
+        transition: opacity .4s ease;
+      }
+      #hint.fade { opacity: 0; }
+    </style>
+
+    <script>
+      // Componente: al hacer click en este modelo, intercambia su GLTF con el del 'other'
+      AFRAME.registerComponent('swap-on-click', {
+        schema: { other: { type: 'selector' } },
+        init: function () {
+          const swap = () => {
+            const other = this.data.other;
+            if (!other) return;
+
+            const mineAttr = this.el.getAttribute('gltf-model');
+            const otherAttr = other.getAttribute('gltf-model');
+
+            const mySrc = mineAttr && mineAttr.src;
+            const otherSrc = otherAttr && otherAttr.src;
+            if (!mySrc || !otherSrc) return;
+
+            // Intercambiar fuentes GLTF
+            this.el.setAttribute('gltf-model', 'src', otherSrc);
+            other.setAttribute('gltf-model', 'src', mySrc);
+
+            // Ocultar la ayuda de UI tras el primer intercambio
+            const hint = document.getElementById('hint');
+            if (hint && !hint.classList.contains('fade')) {
+              hint.classList.add('fade');
+              setTimeout(() => { hint.style.display = 'none'; }, 450);
+            }
+          };
+
+          this.el.addEventListener('click', swap);
+          this.el.addEventListener('touchstart', swap, { passive: true });
+        }
+      });
+
+      // Por si quieres ocultar el hint cuando MindAR detecta el target por primera vez:
+      document.addEventListener('DOMContentLoaded', () => {
+        const hint = document.getElementById('hint');
+        const scene = document.querySelector('a-scene');
+        if (!scene) return;
+        scene.addEventListener('targetFound', () => {
+          // (Opcional) descomenta si quieres que se oculte al detectar un target:
+          // if (hint) { hint.classList.add('fade'); setTimeout(() => hint.style.display='none', 450); }
+        });
+      });
+    </script>
   </head>
   <body>
-    <a-scene mindar-image="imageTargetSrc: ./markerc.mind;" color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <!-- Texto de UI -->
+    <div id="hint">Toca o haz clic en un modelo para intercambiar posiciones</div>
+
+    <a-scene
+      mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
+      color-space="sRGB"
+      renderer="colorManagement: true, physicallyCorrectLights"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false"
+      embedded
+    >
       <a-assets>
-        <img id="card" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.png" />
-        <a-asset-item id="avatarModel" src="https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/softmind/scene.gltf"></a-asset-item>
+        <a-asset-item id="umbrellaModel" src="./blue_beach_umbrella.glb"></a-asset-item>
+        <a-asset-item id="crownModel" src="kings_crown.glb"></a-asset-item>
       </a-assets>
 
-      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+      <!-- Cámara + cursor/raycaster para clicks (mouse/touch) sobre .clickable -->
+      <a-camera position="0 0 0" look-controls="enabled: false">
+        <a-entity cursor="rayOrigin: mouse"
+                  raycaster="objects: .clickable">
+        </a-entity>
+      </a-camera>
+
+      <!-- Target 0 -->
       <a-entity mindar-image-target="targetIndex: 0">
-        <a-plane src="#card" position="0 0 0" height="0.552" width="1" rotation="0 0 0"></a-plane>
-        <a-gltf-model rotation="0 0 0 " position="0 0 0.1" scale="0.005 0.005 0.005" src="#avatarModel" animation="property: position; to: 0 0.1 0.1; dur: 1000; easing: easeInOutQuad; loop: true; dir: alternate">
+        <a-gltf-model
+          id="modelA"
+          class="clickable"
+          rotation="0 0 0"
+          position="0 -0.25 0"
+          scale="0.05 0.05 0.05"
+          src="#crownModel"
+          animation-mixer
+          swap-on-click="other: #modelB">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 1 -->
+      <a-entity mindar-image-target="targetIndex: 1">
+        <a-gltf-model
+          id="modelB"
+          class="clickable"
+          rotation="0 0 0"
+          position="0 -0.25 0"
+          scale="0.05 0.05 0.05"
+          src="#umbrellaModel"
+          animation-mixer
+          swap-on-click="other: #modelA">
+        </a-gltf-model>
       </a-entity>
     </a-scene>
   </body>
