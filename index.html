@@ -3,61 +3,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
     <style>
-      body{margin:0;overflow:hidden}
-      #hint{
-        position:fixed;top:12px;left:50%;transform:translateX(-50%);
-        background:rgba(0,0,0,.6);color:#fff;padding:8px 14px;border-radius:9999px;
-        font:14px/1.2 system-ui;-webkit-user-select:none;user-select:none;pointer-events:none;z-index:9999
-      }
-      #swapBtn{
-        position:fixed;bottom:16px;left:50%;transform:translateX(-50%);
-        z-index:10000;padding:12px 18px;border:0;border-radius:9999px;
-        font:600 15px system-ui;background:#0ea5e9;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.2)
-      }
-      #swapBtn:disabled{opacity:.6}
-    </style>
-    <script>
-      // Alternar visibilidad sin tocar src: robusto en móvil y desktop
-      function toggleVisible(pairA, pairB){
-        // pair = [entidadModelo1, entidadModelo2]
-        const [a1, a2] = pairA, [b1, b2] = pairB;
-        a1.setAttribute('visible', !a1.getAttribute('visible'));
-        a2.setAttribute('visible', !a2.getAttribute('visible'));
-        b1.setAttribute('visible', !b1.getAttribute('visible'));
-        b2.setAttribute('visible', !b2.getAttribute('visible'));
+      body { margin: 0; overflow: hidden; }
+      /* Ayuda / hint */
+      #hint {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 9999px;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 14px;
+        letter-spacing: .2px;
+        z-index: 9999;
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0,0,0,.25);
       }
 
-      function allLoaded(elements, cb){
-        let left = elements.length;
-        const done = () => (--left === 0 && cb());
-        elements.forEach(el => {
-          if (el.hasLoaded) return done();
-          el.addEventListener('model-loaded', done, {once:true});
-        });
+      /* Botón: mantener presionado para girar */
+      #spinBtn {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 10000;
+        padding: 12px 18px;
+        border: 0;
+        border-radius: 9999px;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: #0ea5e9;
+        color: white;
+        box-shadow: 0 8px 24px rgba(0,0,0,.2);
+        cursor: pointer;
+        touch-action: none;         /* evita gestos que roben el toque */
+        -webkit-user-select: none;  /* evita selección en iOS */
+        user-select: none;
+      }
+      #spinBtn.holding { background: #0284c7; } /* color cuando está presionado */
+    </style>
+
+    <script>
+      // Componente: gira (horario) mientras la bandera global está activa
+      AFRAME.registerComponent('spin-while-held', {
+        schema: { speed: { type: 'number', default: 180 } }, // grados/segundo
+        tick: function (time, dt) {
+          if (!window.__spinHeld) return;
+          const rot = this.el.getAttribute('rotation') || {x:0,y:0,z:0};
+          // Sentido horario sobre Z => disminuir ángulo (regla de la mano derecha)
+          rot.z -= (this.data.speed * (dt / 1000));
+          this.el.setAttribute('rotation', rot);
+        }
+      });
+
+      // Manejo robusto de presionado (desktop/móvil) con Pointer Events + fallbacks
+      function setHeld(v) {
+        window.__spinHeld = v;
+        const btn = document.getElementById('spinBtn');
+        if (btn) {
+          if (v) {
+            btn.classList.add('holding');
+            btn.textContent = '⏱️ Girando (mantén presionado)…';
+          } else {
+            btn.classList.remove('holding');
+            btn.textContent = '🔁 Mantén presionado para girar';
+          }
+        }
+      }
+
+      function wireHoldButton() {
+        const btn = document.getElementById('spinBtn');
+        if (!btn) return;
+
+        const down = (e) => { e.preventDefault(); setHeld(true); };
+        const up   = () => setHeld(false);
+
+        // Pointer Events (soportado en iOS/Android modernos y desktop)
+        btn.addEventListener('pointerdown', down);
+        btn.addEventListener('pointerup', up);
+        btn.addEventListener('pointercancel', up);
+        btn.addEventListener('pointerleave', up);
+
+        // Fallbacks adicionales por si el navegador no usa pointer events
+        btn.addEventListener('mousedown', down);
+        window.addEventListener('mouseup', up);
+
+        btn.addEventListener('touchstart', down, {passive:false});
+        window.addEventListener('touchend', up, {passive:true});
+        window.addEventListener('touchcancel', up, {passive:true});
       }
 
       document.addEventListener('DOMContentLoaded', () => {
-        const a1 = document.getElementById('t0_model1');
-        const a2 = document.getElementById('t0_model2');
-        const b1 = document.getElementById('t1_model1');
-        const b2 = document.getElementById('t1_model2');
-        const btn = document.getElementById('swapBtn');
-
-        // Habilita cuando todos están listos (una sola carga, sin cambios de src)
-        allLoaded([a1,a2,b1,b2], () => btn.disabled = false);
-
-        btn.addEventListener('click', () => {
-          btn.disabled = true; // antirebote breve
-          toggleVisible([a1,a2],[b1,b2]);
-          setTimeout(() => btn.disabled = false, 150);
-        });
+        setHeld(false);
+        wireHoldButton();
       });
     </script>
   </head>
   <body>
-    <div id="hint">Pulsa el botón para alternar los modelos de cada marcador</div>
-    <button id="swapBtn" disabled>🔁 Cambiar modelos</button>
+    <!-- Hint actualizado -->
+    <div id="hint">Mantén presionado el botón para hacer girar los modelos</div>
+    <!-- Botón actualizado -->
+    <button id="spinBtn">🔁 Mantén presionado para girar</button>
 
     <a-scene
       mindar-image="imageTargetSrc: ./targets.mind; maxTrack: 2"
@@ -68,37 +119,39 @@
       embedded
     >
       <a-assets>
-        <!-- Reemplaza estas rutas por tus GLB/GLTF -->
-        <a-asset-item id="t0_m1" src="./ball.glb"></a-asset-item>
-        <a-asset-item id="t0_m2" src="./ojo.glb"></a-asset-item>
-        <a-asset-item id="t1_m1" src="./silla.glb"></a-asset-item>
-        <a-asset-item id="t1_m2" src="./trono.glb"></a-asset-item>
+        <!-- Reemplaza estas rutas por las tuyas -->
+        <a-asset-item id="clockModel" src="./ojo.glb"></a-asset-item>
+        <a-asset-item id="crownModel" src="./chair.glb"></a-asset-item>
       </a-assets>
 
-      <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
+      <!-- Cámara simple -->
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- TARGET 0 -->
+      <!-- Target 0 -->
       <a-entity mindar-image-target="targetIndex: 0">
-        <!-- Modelo 1 (visible) -->
-        <a-entity id="t0_model1" visible="true" position="0 -0.25 0" scale="0.05 0.05 0.05">
-          <a-gltf-model src="#t0_m1" animation-mixer></a-gltf-model>
-        </a-entity>
-        <!-- Modelo 2 (oculto al inicio) -->
-        <a-entity id="t0_model2" visible="false" position="0 -0.25 0" scale="0.2 0.2 0.2">
-          <a-gltf-model src="#t0_m2" animation-mixer></a-gltf-model>
-        </a-entity>
+        <a-gltf-model
+          id="modelA"
+          position="0 -0.25 0"
+          scale="0.15 0.15 0.15"
+          src="#sillaModel"
+          animation-mixer
+          spin-while-held="speed: 180">
+        </a-gltf-model>
       </a-entity>
 
-      <!-- TARGET 1 -->
+      <!-- Target 1 -->
       <a-entity mindar-image-target="targetIndex: 1">
-        <a-entity id="t1_model1" visible="true" position="0 -0.25 0" scale="0.2 0.2 0.2">
-          <a-gltf-model src="#t1_m1" animation-mixer></a-gltf-model>
-        </a-entity>
-        <a-entity id="t1_model2" visible="false" position="0 -0.25 0" scale="0.2 0.2 0.2">
-          <a-gltf-model src="#t1_m2" animation-mixer></a-gltf-model>
-        </a-entity>
+        <a-gltf-model
+          id="modelB"
+          position="0 -0.25 0"
+          scale="0.15 0.15 0.15"
+          src="#ojoModel"
+          animation-mixer
+          spin-while-held="speed: 180">
+        </a-gltf-model>
       </a-entity>
     </a-scene>
   </body>
 </html>
+
 
