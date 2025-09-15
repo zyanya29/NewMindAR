@@ -9,7 +9,7 @@
       body { margin: 0; overflow: hidden; }
       canvas, .a-canvas { touch-action: manipulation; }
 
-      /* Hint / ayuda */
+      /* UI */
       #hint {
         position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
         background: rgba(0,0,0,0.6); color:#fff; padding: 8px 14px; border-radius: 9999px;
@@ -19,7 +19,6 @@
       }
       #hint.fade { opacity: 0; }
 
-      /* Botón flotante */
       #swapBtn {
         position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
         z-index: 10000; padding: 12px 18px; border: 0; border-radius: 9999px;
@@ -28,24 +27,45 @@
         cursor: pointer; touch-action: manipulation;
       }
       #swapBtn:disabled { opacity: .6; cursor: default; }
+
+      #status {
+        position: fixed; top: 48px; left: 50%; transform: translateX(-50%);
+        background: rgba(20,20,20,.8); color: #fffa; padding: 6px 10px; border-radius: 8px;
+        font: 12px system-ui; z-index: 9999; max-width: 92vw; text-align: center;
+      }
     </style>
 
     <script>
-      // --- LISTAS DE MODELOS (2 por target) → usa los IDs definidos en <a-assets> ---
-      const modelsT0 = ['#t0_m1', '#t0_m2']; // TargetIndex 0: modelo 1 y 2
-      const modelsT1 = ['#t1_m1', '#t1_m2']; // TargetIndex 1: modelo 1 y 2
-      // -----------------------------------------------------------------------------
+      // === Configura aquí los 2 modelos por target (IDs declarados en <a-assets>) ===
+      const modelsT0 = ['#t0_m1', '#t0_m2']; // Target 0
+      const modelsT1 = ['#t1_m1', '#t1_m2']; // Target 1
+      // ===============================================================================
 
-      let idx0 = 0, idx1 = 0; // índices actuales en cada target
+      let idx0 = 0, idx1 = 0;
 
+      function uiMsg(txt, isError=false) {
+        const s = document.getElementById('status');
+        if (!s) return;
+        s.style.display = 'block';
+        s.style.color = isError ? '#ffd1d1' : '#fffa';
+        s.textContent = txt;
+        clearTimeout(s._t);
+        s._t = setTimeout(() => s.style.display = 'none', 2500);
+      }
+
+      // Setea modelo incluyendo dracoDecoderPath para GLB con compresión
       function setModelSrc(el, assetId) {
-        // Por robustez, seteamos ambos atributos aceptados por <a-gltf-model>
+        // setAttribute objeto: permite parámetros del componente gltf-model
+        el.setAttribute('gltf-model', {
+          src: assetId,
+          dracoDecoderPath: 'https://www.gstatic.com/draco/v1/decoders/'
+          // Si usas texturas KTX2, añade: ktx2TranscoderPath: 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/libs/basis/'
+        });
+        // por compatibilidad, también el atributo src
         el.setAttribute('src', assetId);
-        el.setAttribute('gltf-model', assetId);
       }
 
       function popAnimFor(el) {
-        // Crea/ajusta una animación de "pop" acorde a la escala actual
         const sc = el.getAttribute('scale') || {x:0.20, y:0.20, z:0.20};
         const sx = sc.x ?? sc, sy = sc.y ?? sc, sz = sc.z ?? sc;
         el.setAttribute('animation__pop', `property: scale; startEvents: pop; from: 0 0 0; to: ${sx} ${sy} ${sz}; dur: 380; easing: easeOutBack`);
@@ -57,47 +77,60 @@
         const b = document.getElementById('modelB');
         if (!btn || !a || !b) return;
         let loaded = 0;
-        const mark = () => { loaded++; if (loaded >= 2) btn.disabled = false; };
+        const mark = () => { loaded++; if (loaded >= 2) { btn.disabled = false; uiMsg('Modelos listos'); } };
 
         if (a.hasLoaded) loaded++; else a.addEventListener('model-loaded', mark, { once: true });
         if (b.hasLoaded) loaded++; else b.addEventListener('model-loaded', mark, { once: true });
-        if (loaded >= 2) btn.disabled = false;
+        if (loaded >= 2) { btn.disabled = false; uiMsg('Modelos listos'); }
+      }
+
+      function wireModelEvents(el, name) {
+        el.addEventListener('model-loaded', () => uiMsg(`Cargado: ${name}`));
+        el.addEventListener('model-error', (e) => {
+          console.error(`Error cargando ${name}`, e.detail && e.detail.src, e);
+          uiMsg(`Error cargando ${name} (revisa la ruta)`, true);
+        });
+      }
+
+      function wireAssetLoaded(ids) {
+        ids.forEach(sel => {
+          const it = document.querySelector(sel);
+          if (!it) { uiMsg(`No existe asset ${sel}`, true); return; }
+          if (it.hasLoaded) return;
+          it.addEventListener('loaded', () => uiMsg(`Asset listo: ${sel}`));
+        });
       }
 
       function setupSwap() {
         const btn = document.getElementById('swapBtn');
         const hint = document.getElementById('hint');
-        const mA = document.getElementById('modelA'); // target 0
-        const mB = document.getElementById('modelB'); // target 1
+        const mA = document.getElementById('modelA');
+        const mB = document.getElementById('modelB');
 
-        // Preparar animación "pop"
-        popAnimFor(mA);
-        popAnimFor(mB);
+        popAnimFor(mA); popAnimFor(mB);
+        wireModelEvents(mA, 'Target 0'); wireModelEvents(mB, 'Target 1');
+        wireAssetLoaded([...modelsT0, ...modelsT1]);
 
-        // Habilitar botón cuando los modelos iniciales ya cargaron
         enableWhenReady();
 
         btn.addEventListener('click', () => {
           btn.disabled = true;
 
-          // Avanza al "otro" modelo disponible en cada target (toggle 0↔1)
-          idx0 = 1 - idx0;
+          idx0 = 1 - idx0;  // alterna 0 <-> 1
           idx1 = 1 - idx1;
 
           setModelSrc(mA, modelsT0[idx0]);
           setModelSrc(mB, modelsT1[idx1]);
 
-          // Feedback visual
-          mA.emit('pop');
-          mB.emit('pop');
+          mA.emit('pop'); mB.emit('pop');
 
-          // Ocultar hint en el primer uso
           if (hint && !hint.classList.contains('fade')) {
             hint.classList.add('fade');
             setTimeout(() => { hint.style.display = 'none'; }, 450);
           }
 
-          setTimeout(() => { btn.disabled = false; }, 220);
+          // espera breve para evitar doble click
+          setTimeout(() => { btn.disabled = false; }, 240);
         });
       }
 
@@ -105,9 +138,8 @@
     </script>
   </head>
   <body>
-    <!-- Texto de UI -->
-    <div id="hint">Presiona el botón para cambiar el modelo de cada marcador</div>
-    <!-- Botón global -->
+    <div id="hint">Presiona el botón para alternar el modelo de cada marcador</div>
+    <div id="status" style="display:none"></div>
     <button id="swapBtn" disabled>🔁 Cambiar modelos</button>
 
     <a-scene
@@ -119,17 +151,17 @@
       embedded
     >
       <a-assets>
-        <!-- 🔁🔁🔁 REEMPLAZA AQUÍ LAS RUTAS DE TUS MODELOS 🔁🔁🔁 -->
-        <!-- TARGET 0 (dos modelos): pon aquí los GLB/GLTF del target 0 -->
-        <a-asset-item id="t0_m1" src="./ball.glb"></a-asset-item> <!-- ← URL del modelo 1 de T0 -->
-        <a-asset-item id="t0_m2" src="./ojo.glb"></a-asset-item> <!-- ← URL del modelo 2 de T0 -->
+        <!-- 🔁🔁🔁 REEMPLAZA AQUÍ LAS RUTAS DE TUS MODELOS (GLB/GLTF) 🔁🔁🔁 -->
+        <!-- TARGET 0 (dos modelos): -->
+        <a-asset-item id="t0_m1" src="./ball.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 1 de T0 -->
+        <a-asset-item id="t0_m2" src="./ojo.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 2 de T0 -->
 
-        <!-- TARGET 1 (dos modelos): pon aquí los GLB/GLTF del target 1 -->
-        <a-asset-item id="t1_m1" src="./chair.glb"></a-asset-item> <!-- ← URL del modelo 1 de T1 -->
-        <a-asset-item id="t1_m2" src="./trono.glb"></a-asset-item> <!-- ← URL del modelo 2 de T1 -->
+        <!-- TARGET 1 (dos modelos): -->
+        <a-asset-item id="t1_m1" src="./chair.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 1 de T1 -->
+        <a-asset-item id="t1_m2" src="./trono.glb" crossorigin="anonymous"></a-asset-item> <!-- ← URL 2 de T1 -->
       </a-assets>
 
-      <!-- Cámara simple -->
+      <!-- Cámara -->
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
       <!-- Target 0 -->
@@ -138,7 +170,7 @@
           id="modelA"
           position="0 -0.25 0"
           scale="0.20 0.20 0.20"
-          src="#t0_m1"       
+          src="#t0_m1"  <!-- modelo inicial de T0 -->
           animation-mixer>
         </a-gltf-model>
       </a-entity>
@@ -149,12 +181,10 @@
           id="modelB"
           position="0 -0.25 0"
           scale="0.20 0.20 0.20"
-          src="#t1_m1"       
+          src="#t1_m1"  <!-- modelo inicial de T1 -->
           animation-mixer>
         </a-gltf-model>
       </a-entity>
     </a-scene>
   </body>
 </html>
-
-
