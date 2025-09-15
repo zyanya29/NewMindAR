@@ -121,12 +121,12 @@
       <a-assets>
         <!-- 🔁🔁🔁 REEMPLAZA AQUÍ LAS RUTAS DE TUS MODELOS 🔁🔁🔁 -->
         <!-- TARGET 0 (dos modelos): pon aquí los GLB/GLTF del target 0 -->
-        <a-asset-item id="t0_m1" src="./target0_modelo_1.glb"></a-asset-item> <!-- ← URL del modelo 1 de T0 -->
-        <a-asset-item id="t0_m2" src="./target0_modelo_2.glb"></a-asset-item> <!-- ← URL del modelo 2 de T0 -->
+        <a-asset-item id="t0_m1" src="./ball.glb"></a-asset-item> <!-- ← URL del modelo 1 de T0 -->
+        <a-asset-item id="t0_m2" src="./ojo.glb"></a-asset-item> <!-- ← URL del modelo 2 de T0 -->
 
         <!-- TARGET 1 (dos modelos): pon aquí los GLB/GLTF del target 1 -->
-        <a-asset-item id="t1_m1" src="./target1_modelo_1.glb"></a-asset-item> <!-- ← URL del modelo 1 de T1 -->
-        <a-asset-item id="t1_m2" src="./target1_modelo_2.glb"></a-asset-item> <!-- ← URL del modelo 2 de T1 -->
+        <a-asset-item id="t1_m1" src="./chair.glb"></a-asset-item> <!-- ← URL del modelo 1 de T1 -->
+        <a-asset-item id="t1_m2" src="./trono.glb"></a-asset-item> <!-- ← URL del modelo 2 de T1 -->
       </a-assets>
 
       <!-- Cámara simple -->
@@ -138,7 +138,7 @@
           id="modelA"
           position="0 -0.25 0"
           scale="0.20 0.20 0.20"
-          src="#t0_m1"       <!-- modelo inicial del target 0 -->
+          src="#t0_m1"       
           animation-mixer>
         </a-gltf-model>
       </a-entity>
@@ -149,7 +149,7 @@
           id="modelB"
           position="0 -0.25 0"
           scale="0.20 0.20 0.20"
-          src="#t1_m1"       <!-- modelo inicial del target 1 -->
+          src="#t1_m1"       
           animation-mixer>
         </a-gltf-model>
       </a-entity>
